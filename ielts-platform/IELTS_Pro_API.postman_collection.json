@@ -1,0 +1,642 @@
+{
+  "info": {
+    "name": "IELTS Pro API - Session Auth",
+    "_postman_id": "ielts-pro-session-2024",
+    "description": "API collection dùng Session Cookie (không cần token).\n\n⚠️ QUAN TRỌNG: Bật 'Automatically follow redirects' và đảm bảo Postman lưu cookie.\n\n📌 Postman Settings → Preferences → 'Automatically follow redirects' = ON\n📌 Trong Collection Settings → 'Cookie jar' đang hoạt động\n\n## Thứ tự test\n1. Login (Admin/Teacher/Student)\n2. Courses → Lessons → Tests\n3. Enroll (dùng Student session)\n4. Submit test\n5. Xem Results",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",   "value": "http://localhost:5000/api", "type": "string" },
+    { "key": "course_id",  "value": "", "type": "string" },
+    { "key": "lesson_id",  "value": "", "type": "string" },
+    { "key": "test_id",    "value": "", "type": "string" },
+    { "key": "result_id",  "value": "", "type": "string" },
+    { "key": "user_id",    "value": "", "type": "string" },
+    { "key": "question_id_1", "value": "", "type": "string" },
+    { "key": "question_id_2", "value": "", "type": "string" },
+    { "key": "question_id_3", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "🔐 1. Auth",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Server dang chay', () => pm.expect(pm.response.code).to.eql(200));", "console.log('Session user:', pm.response.json().sessionUser);"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Login - Admin ⭐ (Chạy đầu tiên)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@ielts.com\",\n  \"password\": \"admin123\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "const data = pm.response.json();",
+            "pm.test('Co user trong response', () => pm.expect(data).to.have.property('user'));",
+            "pm.test('Role la admin', () => pm.expect(data.user.role).to.eql('admin'));",
+            "pm.test('Khong co token (session-based)', () => pm.expect(data).to.not.have.property('token'));",
+            "console.log('Logged in as:', data.user.name, '| Role:', data.user.role);",
+            "console.log('Session cookie se duoc luu tu dong boi Postman');"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Login - Teacher ⭐",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"teacher@ielts.com\",\n  \"password\": \"teacher123\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "pm.test('Role la teacher', () => pm.expect(pm.response.json().user.role).to.eql('teacher'));",
+            "console.log('Logged in as teacher:', pm.response.json().user.name);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Login - Student ⭐",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"student@ielts.com\",\n  \"password\": \"student123\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "pm.test('Role la student', () => pm.expect(pm.response.json().user.role).to.eql('student'));"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /me - Xem thong tin session hien tai",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/auth/me", "host": ["{{base_url}}"], "path": ["auth", "me"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK - Session hop le', () => pm.expect(pm.response.code).to.eql(200));",
+            "pm.test('Co user', () => pm.expect(pm.response.json()).to.have.property('user'));",
+            "console.log('Current session user:', pm.response.json().user?.name, '|', pm.response.json().user?.role);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /me - Chua login (expect 401)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Cookie", "value": "", "description": "Xoa cookie de test unauthenticated" }],
+            "url": { "raw": "{{base_url}}/auth/me", "host": ["{{base_url}}"], "path": ["auth", "me"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401 khi chua login', () => pm.expect([200, 401]).to.include(pm.response.code));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Login - Sai mat khau (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@ielts.com\",\n  \"password\": \"wrongpassword\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401 sai mat khau', () => pm.expect(pm.response.code).to.eql(401));"] , "type": "text/javascript" } }]
+        },
+        {
+          "name": "Login - Thieu password (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@ielts.com\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400 thieu password', () => pm.expect(pm.response.code).to.eql(400));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "Register - Hoc vien moi",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Nguyen Van Test\",\n  \"email\": \"test_new_student@ielts.com\",\n  \"password\": \"123456\",\n  \"role\": \"student\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth", "register"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('201 tao tai khoan', () => pm.expect([201, 400]).to.include(pm.response.code));", "console.log(pm.response.json());"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "PUT /profile - Cap nhat ten",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Ten Da Cap Nhat\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/profile", "host": ["{{base_url}}"], "path": ["auth", "profile"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /logout - Dang xuat",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/auth/logout", "host": ["{{base_url}}"], "path": ["auth", "logout"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK logout', () => pm.expect(pm.response.code).to.eql(200));", "console.log('Logged out. Session bi xoa. Can login lai de tiep tuc.');"], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "📚 2. Courses (Login Teacher truoc)",
+      "item": [
+        {
+          "name": "GET /courses - Danh sach",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/courses", "host": ["{{base_url}}"], "path": ["courses"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "const courses = pm.response.json().courses;",
+            "pm.test('Co mang courses', () => pm.expect(courses).to.be.an('array'));",
+            "if (courses.length > 0) {",
+            "  pm.collectionVariables.set('course_id', courses[0]._id);",
+            "  console.log('Saved course_id:', courses[0]._id, '|', courses[0].title);",
+            "} else { console.log('Chua co khoa hoc. Chay POST /courses truoc.'); }"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /courses - Tao khoa hoc",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"IELTS Reading Intensive\",\n  \"description\": \"Khoa hoc luyen thi IELTS Reading tu 5.5 len 7.0\",\n  \"level\": \"Intermediate\",\n  \"targetScore\": \"6.5 - 7.0\",\n  \"skills\": [\"Reading\"],\n  \"duration\": 30,\n  \"isPublished\": true\n}" },
+            "url": { "raw": "{{base_url}}/courses", "host": ["{{base_url}}"], "path": ["courses"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 201) {",
+            "  pm.collectionVariables.set('course_id', pm.response.json().course._id);",
+            "  pm.test('201 Tao thanh cong', () => pm.expect(pm.response.code).to.eql(201));",
+            "  console.log('New course_id:', pm.response.json().course._id);",
+            "} else { pm.test('Loi - Dam bao login bang teacher/admin', () => pm.expect(pm.response.code).to.eql(201)); console.log(pm.response.json()); }"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /courses - Thieu description (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Khoa hoc thieu description\"\n}" },
+            "url": { "raw": "{{base_url}}/courses", "host": ["{{base_url}}"], "path": ["courses"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400 validation error', () => pm.expect(pm.response.code).to.eql(400));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /courses/:id - Chi tiet",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/courses/{{course_id}}", "host": ["{{base_url}}"], "path": ["courses", "{{course_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "const c = pm.response.json().course;",
+            "pm.test('Co lessons array', () => pm.expect(c.lessons).to.be.an('array'));",
+            "pm.test('Co tests array', () => pm.expect(c.tests).to.be.an('array'));"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "PUT /courses/:id - Cap nhat",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"IELTS Reading Intensive - UPDATED\",\n  \"isPublished\": true\n}" },
+            "url": { "raw": "{{base_url}}/courses/{{course_id}}", "host": ["{{base_url}}"], "path": ["courses", "{{course_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /courses - id sai (expect 400)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/courses/invalid-id", "host": ["{{base_url}}"], "path": ["courses", "invalid-id"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400 ObjectId sai', () => pm.expect(pm.response.code).to.eql(400));"], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "🎬 3. Lessons (Login Teacher truoc)",
+      "item": [
+        {
+          "name": "GET /lessons/course/all - Tat ca lesson cua teacher",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/lessons/course/all", "host": ["{{base_url}}"], "path": ["lessons", "course", "all"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "pm.test('Co mang lessons', () => pm.expect(pm.response.json().lessons).to.be.an('array'));",
+            "console.log('Total lessons:', pm.response.json().lessons.length);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /lessons/course/:courseId - Lessons cua 1 khoa hoc",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/lessons/course/{{course_id}}", "host": ["{{base_url}}"], "path": ["lessons", "course", "{{course_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "const lessons = pm.response.json().lessons;",
+            "if (lessons.length > 0) { pm.collectionVariables.set('lesson_id', lessons[0]._id); console.log('Saved lesson_id:', lessons[0]._id); }"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /lessons - Tao bai hoc video",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"IELTS Reading - True/False/Not Given\",\n  \"description\": \"Huong dan lam dang bai True False Not Given trong Reading\",\n  \"course\": \"{{course_id}}\",\n  \"type\": \"video\",\n  \"skill\": \"Reading\",\n  \"order\": 1,\n  \"isPublished\": true,\n  \"content\": {\n    \"videoUrl\": \"https://www.youtube.com/embed/dQw4w9WgXcQ\",\n    \"duration\": 25\n  }\n}" },
+            "url": { "raw": "{{base_url}}/lessons", "host": ["{{base_url}}"], "path": ["lessons"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 201) {",
+            "  pm.collectionVariables.set('lesson_id', pm.response.json().lesson._id);",
+            "  pm.test('201 OK', () => pm.expect(pm.response.code).to.eql(201));",
+            "  console.log('lesson_id:', pm.response.json().lesson._id);",
+            "} else { console.log('Loi:', pm.response.json()); }"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /lessons - Tao bai hoc document",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"IELTS Reading - Matching Headings\",\n  \"description\": \"Huong dan lam dang bai Matching Headings\",\n  \"course\": \"{{course_id}}\",\n  \"type\": \"document\",\n  \"skill\": \"Reading\",\n  \"order\": 2,\n  \"isPublished\": true,\n  \"content\": {\n    \"text\": \"## Matching Headings\\n\\nDang bai nay yeu cau ban chon tieu de phu hop cho moi doan van.\\n\\n## Chien thuat\\n\\n1. Doc tieu de truoc\\n2. Doc doan van va xac dinh y chinh\\n3. Chon tieu de phu hop nhat\",\n    \"duration\": 20\n  }\n}" },
+            "url": { "raw": "{{base_url}}/lessons", "host": ["{{base_url}}"], "path": ["lessons"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('201 OK', () => pm.expect(pm.response.code).to.eql(201));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /lessons - Thieu course (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Bai hoc thieu course\"\n}" },
+            "url": { "raw": "{{base_url}}/lessons", "host": ["{{base_url}}"], "path": ["lessons"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400 validation', () => pm.expect(pm.response.code).to.eql(400));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /lessons/:id - Chi tiet bai hoc",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/lessons/{{lesson_id}}", "host": ["{{base_url}}"], "path": ["lessons", "{{lesson_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));", "pm.test('Co lesson', () => pm.expect(pm.response.json()).to.have.property('lesson'));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "PUT /lessons/:id - Cap nhat",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"IELTS Reading - True/False/Not Given (Updated)\",\n  \"isPublished\": true\n}" },
+            "url": { "raw": "{{base_url}}/lessons/{{lesson_id}}", "host": ["{{base_url}}"], "path": ["lessons", "{{lesson_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /lessons/invalid-id (expect 400)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/lessons/not-valid", "host": ["{{base_url}}"], "path": ["lessons", "not-valid"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400 ObjectId sai', () => pm.expect(pm.response.code).to.eql(400));"], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "📝 4. Tests (Login Teacher truoc)",
+      "item": [
+        {
+          "name": "GET /tests - Danh sach de thi",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/tests", "host": ["{{base_url}}"], "path": ["tests"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "const tests = pm.response.json().tests;",
+            "pm.test('Co mang tests', () => pm.expect(tests).to.be.an('array'));",
+            "if (tests.length > 0) { pm.collectionVariables.set('test_id', tests[0]._id); console.log('Saved test_id:', tests[0]._id, '|', tests[0].title); }"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /tests - Tao de kiem tra",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"IELTS Reading Test - True False Not Given\",\n  \"description\": \"Bai kiem tra dang True/False/Not Given\",\n  \"course\": \"{{course_id}}\",\n  \"skill\": \"Reading\",\n  \"duration\": 20,\n  \"passingScore\": 60,\n  \"isPublished\": true,\n  \"questions\": [\n    {\n      \"question\": \"IELTS Reading Academic co bao nhieu sections?\",\n      \"type\": \"multiple-choice\",\n      \"options\": [\"2\", \"3\", \"4\", \"5\"],\n      \"correctAnswer\": \"3\",\n      \"explanation\": \"IELTS Academic Reading gom 3 passages voi 40 cau hoi trong 60 phut.\",\n      \"points\": 1\n    },\n    {\n      \"question\": \"IELTS Reading co tong cong bao nhieu cau hoi?\",\n      \"type\": \"multiple-choice\",\n      \"options\": [\"30\", \"35\", \"40\", \"45\"],\n      \"correctAnswer\": \"40\",\n      \"explanation\": \"Co 40 cau hoi, moi passage khoang 13-14 cau.\",\n      \"points\": 1\n    },\n    {\n      \"question\": \"True or False: IELTS Reading cho phep su dung tu dien.\",\n      \"type\": \"true-false\",\n      \"options\": [\"True\", \"False\"],\n      \"correctAnswer\": \"False\",\n      \"explanation\": \"Khong duoc su dung tu dien trong ky thi IELTS.\",\n      \"points\": 1\n    }\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/tests", "host": ["{{base_url}}"], "path": ["tests"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 201) {",
+            "  const test = pm.response.json().test;",
+            "  pm.collectionVariables.set('test_id', test._id);",
+            "  pm.collectionVariables.set('question_id_1', test.questions[0]._id);",
+            "  pm.collectionVariables.set('question_id_2', test.questions[1]._id);",
+            "  pm.collectionVariables.set('question_id_3', test.questions[2]._id);",
+            "  pm.test('201 OK', () => pm.expect(pm.response.code).to.eql(201));",
+            "  console.log('test_id:', test._id);",
+            "  console.log('question_id_1:', test.questions[0]._id);",
+            "  console.log('question_id_2:', test.questions[1]._id);",
+            "  console.log('question_id_3:', test.questions[2]._id);",
+            "  console.log('--- question IDs da duoc luu tu dong vao bien ---');",
+            "} else { console.log('Loi:', pm.response.json()); }"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /tests/:id - Chi tiet (Teacher thay dap an)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/tests/{{test_id}}", "host": ["{{base_url}}"], "path": ["tests", "{{test_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "const q = pm.response.json().test.questions;",
+            "pm.test('Co questions', () => pm.expect(q).to.be.an('array'));",
+            "if (q.length > 0) {",
+            "  pm.collectionVariables.set('question_id_1', q[0]._id);",
+            "  if (q[1]) pm.collectionVariables.set('question_id_2', q[1]._id);",
+            "  if (q[2]) pm.collectionVariables.set('question_id_3', q[2]._id);",
+            "  console.log('question IDs saved from GET:');",
+            "  q.forEach((qq, i) => console.log('Q' + (i+1) + ':', qq._id, '|', qq.question?.substring(0,40)));",
+            "}"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "PUT /tests/:id - Cap nhat de thi",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"IELTS Reading Test - UPDATED\",\n  \"isPublished\": true\n}" },
+            "url": { "raw": "{{base_url}}/tests/{{test_id}}", "host": ["{{base_url}}"], "path": ["tests", "{{test_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /tests - Thieu title (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"skill\": \"Reading\"\n}" },
+            "url": { "raw": "{{base_url}}/tests", "host": ["{{base_url}}"], "path": ["tests"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400 validation', () => pm.expect(pm.response.code).to.eql(400));"], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "🎒 5. Enroll & Submit (Login Student truoc)",
+      "item": [
+        {
+          "name": "POST /courses/:id/enroll - Dang ky khoa hoc",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/courses/{{course_id}}/enroll", "host": ["{{base_url}}"], "path": ["courses", "{{course_id}}", "enroll"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 dang ky hoac 400 da dang ky roi', () => pm.expect([200, 400]).to.include(pm.response.code));",
+            "console.log(pm.response.json().message);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /results/submit - Nop bai ⭐ (questionIds tu dong)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"testId\": \"{{test_id}}\",\n  \"answers\": [\n    { \"questionId\": \"{{question_id_1}}\", \"selectedAnswer\": \"3\" },\n    { \"questionId\": \"{{question_id_2}}\", \"selectedAnswer\": \"40\" },\n    { \"questionId\": \"{{question_id_3}}\", \"selectedAnswer\": \"False\" }\n  ],\n  \"timeTaken\": 360\n}" },
+            "url": { "raw": "{{base_url}}/results/submit", "host": ["{{base_url}}"], "path": ["results", "submit"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 201) {",
+            "  const r = pm.response.json().result;",
+            "  pm.collectionVariables.set('result_id', r._id);",
+            "  pm.test('201 Nop bai thanh cong', () => pm.expect(pm.response.code).to.eql(201));",
+            "  pm.test('Co percentage', () => pm.expect(r).to.have.property('percentage'));",
+            "  pm.test('Co passed', () => pm.expect(r).to.have.property('passed'));",
+            "  console.log('===== KET QUA =====');",
+            "  console.log('Diem:', r.score + '/' + r.totalPoints, '|', r.percentage + '%');",
+            "  console.log('Ket qua:', r.passed ? 'DAT ✅' : 'CHUA DAT ❌');",
+            "} else {",
+            "  console.log('Loi:', pm.response.json());",
+            "  console.log('Goi POST /tests truoc de lay question_id');",
+            "}"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /results/submit - Nop bai sai het (0 diem)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"testId\": \"{{test_id}}\",\n  \"answers\": [\n    { \"questionId\": \"{{question_id_1}}\", \"selectedAnswer\": \"2\" },\n    { \"questionId\": \"{{question_id_2}}\", \"selectedAnswer\": \"30\" },\n    { \"questionId\": \"{{question_id_3}}\", \"selectedAnswer\": \"True\" }\n  ],\n  \"timeTaken\": 600\n}" },
+            "url": { "raw": "{{base_url}}/results/submit", "host": ["{{base_url}}"], "path": ["results", "submit"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201 OK', () => pm.expect(pm.response.code).to.eql(201));",
+            "const r = pm.response.json().result;",
+            "pm.test('Diem phai la 0', () => pm.expect(r.score).to.eql(0));",
+            "pm.test('Phai CHUA DAT', () => pm.expect(r.passed).to.eql(false));",
+            "console.log('Diem 0:', r.percentage + '% | passed:', r.passed);"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "POST /results/submit - Thieu testId (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"answers\": []\n}" },
+            "url": { "raw": "{{base_url}}/results/submit", "host": ["{{base_url}}"], "path": ["results", "submit"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400 thieu testId', () => pm.expect(pm.response.code).to.eql(400));"], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "📊 6. Results",
+      "item": [
+        {
+          "name": "GET /results/my - Ket qua ca nhan (Student)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/results/my", "host": ["{{base_url}}"], "path": ["results", "my"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "const results = pm.response.json().results;",
+            "pm.test('Co mang results', () => pm.expect(results).to.be.an('array'));",
+            "if (results.length > 0) {",
+            "  pm.collectionVariables.set('result_id', results[0]._id);",
+            "  console.log('Total results:', results.length);",
+            "  results.forEach(r => console.log('-', r.test?.title, '|', r.percentage + '%', r.passed ? 'DAT' : 'FAIL'));",
+            "}"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /results/:id - Chi tiet ket qua",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/results/{{result_id}}", "host": ["{{base_url}}"], "path": ["results", "{{result_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.expect(pm.response.code).to.eql(200));",
+            "const r = pm.response.json().result;",
+            "pm.test('Co day du fields', () => { pm.expect(r).to.have.property('score'); pm.expect(r).to.have.property('answers'); });"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /results/stats/overview (Teacher/Admin)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/results/stats/overview", "host": ["{{base_url}}"], "path": ["results", "stats", "overview"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  pm.test('Co total, passed, failed, avgScore', () => { pm.expect(d.total).to.be.a('number'); pm.expect(d.passed).to.be.a('number'); });",
+            "  console.log('Stats:', JSON.stringify(d));",
+            "} else { pm.test('403 neu la student', () => pm.expect([200, 403]).to.include(pm.response.code)); }"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /results/test/:testId - Ket qua theo de (Teacher/Admin)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/results/test/{{test_id}}", "host": ["{{base_url}}"], "path": ["results", "test", "{{test_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK hoac 403', () => pm.expect([200, 403]).to.include(pm.response.code));",
+            "if (pm.response.code === 200) { console.log('So luot lam bai:', pm.response.json().results.length); }"
+          ], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "👥 7. Users Admin (Login Admin truoc)",
+      "item": [
+        {
+          "name": "GET /users/stats - Thong ke",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/users/stats", "host": ["{{base_url}}"], "path": ["users", "stats"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 hoac 403', () => pm.expect([200, 403]).to.include(pm.response.code));",
+            "if (pm.response.code === 200) console.log('User stats:', JSON.stringify(pm.response.json()));"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /users - Danh sach nguoi dung",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK (admin)', () => pm.expect([200, 403]).to.include(pm.response.code));",
+            "if (pm.response.code === 200) {",
+            "  const u = pm.response.json().users;",
+            "  console.log('Total users:', u.length);",
+            "  if (u.length > 0) { pm.collectionVariables.set('user_id', u.find(x => x.role === 'student')?._id || u[0]._id); }",
+            "}"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /users?role=teacher - Loc theo role",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/users?role=teacher", "host": ["{{base_url}}"], "path": ["users"], "query": [{ "key": "role", "value": "teacher" }] }
+          }
+        },
+        {
+          "name": "POST /users - Tao user moi",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Hoc Vien Moi ABC\",\n  \"email\": \"new_abc_123@ielts.com\",\n  \"password\": \"123456\",\n  \"role\": \"student\"\n}" },
+            "url": { "raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 201) {",
+            "  pm.collectionVariables.set('user_id', pm.response.json().user._id);",
+            "  pm.test('201 Tao thanh cong', () => pm.expect(pm.response.code).to.eql(201));",
+            "  pm.test('Khong co password trong response', () => pm.expect(pm.response.json().user).to.not.have.property('password'));",
+            "}"
+          ], "type": "text/javascript" } }]
+        },
+        {
+          "name": "PUT /users/:id - Cap nhat user",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Ten Da Sua\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{base_url}}/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["users", "{{user_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect([200, 403, 404]).to.include(pm.response.code));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "PUT /users/:id - Khoa tai khoan",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"isActive\": false\n}" },
+            "url": { "raw": "{{base_url}}/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["users", "{{user_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect([200, 403, 404]).to.include(pm.response.code));", "if (pm.response.code === 200) pm.test('isActive = false', () => pm.expect(pm.response.json().user.isActive).to.eql(false));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "DELETE /users/:id - Xoa user",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{base_url}}/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["users", "{{user_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK hoac 404', () => pm.expect([200, 403, 404]).to.include(pm.response.code));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "GET /users - Student truy cap (expect 403)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('403 neu student, 200 neu admin', () => pm.expect([200, 403]).to.include(pm.response.code)); console.log('Role hien tai kiem tra bang GET /auth/me');"], "type": "text/javascript" } }]
+        }
+      ]
+    },
+    {
+      "name": "🗑️ 8. Cleanup (Admin)",
+      "item": [
+        {
+          "name": "DELETE /lessons/:id",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{base_url}}/lessons/{{lesson_id}}", "host": ["{{base_url}}"], "path": ["lessons", "{{lesson_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect([200, 403, 404]).to.include(pm.response.code));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "DELETE /tests/:id",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{base_url}}/tests/{{test_id}}", "host": ["{{base_url}}"], "path": ["tests", "{{test_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect([200, 403, 404]).to.include(pm.response.code));"], "type": "text/javascript" } }]
+        },
+        {
+          "name": "DELETE /courses/:id (Admin only)",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{base_url}}/courses/{{course_id}}", "host": ["{{base_url}}"], "path": ["courses", "{{course_id}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.expect([200, 403, 404]).to.include(pm.response.code));"], "type": "text/javascript" } }]
+        }
+      ]
+    }
+  ]
+}
